@@ -43,19 +43,37 @@
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        const dimensions = ["seasonEndYear", "shotsOnTarget", "totalShots", "corners", "goalsScored", "bettingOdds", "yellowCards", "pointsScored"];
+        const dimensions = [
+            "seasonEndYear",
+            "shotsOnTarget",
+            "totalShots",
+            "corners",
+            "goalsScored",
+            "bettingOdds",
+            "yellowCards",
+            "pointsScored"
+        ];
         const x = d3.scalePoint().range([0, width]).padding(1).domain(dimensions);
         const y = {};
 
         Promise.all([
             d3.csv("pl-tables-1993-2024.csv"),      // League table dataset
-            d3.csv("Combined_data_2015-24.csv"),       // Football-Data.co.uk dataset
+            d3.csv("Combined_data_2015-2024.csv"),       // Football-Data.co.uk dataset
             d3.csv("epl-allseasons-matchstats.csv") // Detailed match stats dataset
         ]).then(function (files) {
-            const leagueData = files[0];
-            const footballData = files[1];
-            const matchStatsData = files[2];})
+            let leagueData = files[0];
+            let footballData = files[1];
+            let matchStatsData = files[2];
 
+            leagueData = leagueData.filter(d => +d["season_end_year"] >= 2015 && +d["season_end_year"] <= 2024);
+            footballData = footballData.filter(d => +d["season-end-year"] >= 2015 && +d["season-end-year"] <= 2024);
+            matchStatsData = matchStatsData.filter(d => +d["season-end-year"] >= 2015 && +d["season-end-year"] <= 2024);
+
+            console.log("Filtered leagueData count:", leagueData.length);
+            console.log("Filtered footballData count:", footballData.length);
+            console.log("Filtered matchStatsData count:", matchStatsData.length);
+
+        })
     </script>
 </body>
 
