@@ -1,26 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>D3 Visualisation</title>
+    <title>Parallel Coordinates Plot</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: sans-serif;
         }
+
         .axis path,
         .axis line {
             fill: none;
             stroke: #000;
             shape-rendering: crispEdges;
         }
+
+        .foreground path {
+            stroke: steelblue;
+            opacity: 0.7;
+            fill: none;
+        }
+
+        .brush .selection {
+            fill: #ccc;
+            fill-opacity: 0.3;
+            stroke: none;
+        }
     </style>
 </head>
+
 <body>
     <script>
-        d3.select("body")
-          .append("p")
-          .text("Hello, D3!");
+        const margin = { top: 50, right: 30, bottom: 10, left: 30 },
+            width = 960 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+        const svg = d3.select("body").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const dimensions = ["seasonEndYear", "shotsOnTarget", "totalShots", "corners", "goalsScored", "bettingOdds", "yellowCards", "pointsScored"];
+        const x = d3.scalePoint().range([0, width]).padding(1).domain(dimensions);
+        const y = {};
+
+        Promise.all([
+            d3.csv("pl-tables-1993-2024.csv"),      // League table dataset
+            d3.csv("Combined_data_2015-24.csv"),       // Football-Data.co.uk dataset
+            d3.csv("epl-allseasons-matchstats.csv") // Detailed match stats dataset
+        ]).then(function (files) {
+            const leagueData = files[0];
+            const footballData = files[1];
+            const matchStatsData = files[2];})
+
     </script>
 </body>
+
 </html>
