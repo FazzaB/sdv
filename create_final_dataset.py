@@ -19,8 +19,8 @@ TEAM_NAME_MAP = {
     "Cardiff": "Cardiff City",
 }
 
-def standardize_team_name(name: str) -> str:
-    """Return the standardized team name if found in TEAM_NAME_MAP, else the original."""
+def standardise_team_name(name: str) -> str:
+    """Return the standardised team name if found in TEAM_NAME_MAP, else the original."""
     if not isinstance(name, str):
         return name 
     name = name.strip()
@@ -33,8 +33,8 @@ pl = pd.read_csv("pl-tables-1993-2024.csv", encoding='latin-1')
 pl.columns = pl.columns.str.strip().str.lower()
 pl_filtered = pl[pl["season-end-year"].between(2015, 2024)]
 
-agg["team"] = agg["team"].apply(standardize_team_name)
-pl_filtered["team"] = pl_filtered["team"].apply(standardize_team_name)
+agg["team"] = agg["team"].apply(standardise_team_name)
+pl_filtered["team"] = pl_filtered["team"].apply(standardise_team_name)
 
 print("Aggregated data columns:", agg.columns.tolist())
 print("PL table columns:", pl_filtered.columns.tolist())
@@ -44,6 +44,13 @@ final_df = pd.merge(
     pl_filtered[["season-end-year", "team", "points"]],
     on=["season-end-year", "team"],
     how="left"
+)
+
+final_df["position"] = (
+    final_df
+    .groupby("season-end-year")["points"]
+    .rank(method="first", ascending=False)
+    .astype(int)
 )
 
 print("Final dataset preview:")

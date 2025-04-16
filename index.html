@@ -120,7 +120,8 @@
             "corners",
             "goals_scored",
             "yellow_cards",
-            "points"
+            "points",
+            "position"
         ];
 
         const axisLabels = {
@@ -130,7 +131,8 @@
             "corners": "Corners",
             "goals_scored": "Goals Scored",
             "yellow_cards": "Yellow Cards",
-            "points": "Points"
+            "points": "Points",
+            "position": "Final League Position"
         };
 
         const x = d3.scalePoint()
@@ -168,12 +170,15 @@
 
         d3.csv("final_dataset_2015-2024.csv").then(data => {
             data.forEach(d => {
-                dimensions.slice(1).forEach(k => d[k] = +d[k]);
+                for (let i = 1; i < dimensions.length; i++) {
+                    d[dimensions[i]] = +d[dimensions[i]];
+                }
             });
 
             dimensions.forEach(dim => {
                 if (dim === "season-end-year") {
-                    const vals = [...new Set(data.map(d => d[dim]))].sort();
+                    const vals = [...new Set(data.map(d => d[dim]))]
+                        .sort((a, b) => a - b);
                     y[dim] = d3.scalePoint()
                         .domain(vals)
                         .range([height, 0])
@@ -252,7 +257,8 @@
                Corners: ${d.corners}<br/>
                Goals Scored: ${d.goals_scored}<br/>
                Yellow Cards: ${d.yellow_cards}<br/>
-               Points: ${d.points}`
+               Points: ${d.points}</br/>
+                Final League Position: ${d.position}`
                         )
                             .style("left", (e.pageX + 10) + "px")
                             .style("top", (e.pageY - 28) + "px");
