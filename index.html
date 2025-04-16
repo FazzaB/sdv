@@ -136,24 +136,36 @@
         const y = {};
 
         const teamColor = {
-            "Arsenal": "#EF0107", "Aston Villa": "#670E36", "Burnley": "#8A1538",
-            "Chelsea": "#034694", "Crystal Palace": "#B11226", "Everton": "#003399",
-            "Hull City": "#FFB500", "Leicester City": "#00529B", "Liverpool": "#C8102E",
-            "Manchester City": "#6CABDD", "Manchester Utd": "#DA291C", "Newcastle United": "#241F20",
-            "Queens Park Rangers": "#005C9E", "Southampton": "#D71920", "Stoke City": "#A71930",
-            "Sunderland": "#D71920", "Swansea City": "#FFC20E", "Tottenham": "#132257",
-            "West Bromwich Albion": "#21409A", "West Ham": "#7A263A", "Wolverhampton Wanderers": "#FDB913"
+            "Arsenal": "#EF0107",
+            "Aston Villa": "#670E36",
+            "Burnley": "#8A1538",
+            "Chelsea": "#034694",
+            "Crystal Palace": "#B11226",
+            "Everton": "#003399",
+            "Hull City": "#FFB590",
+            "Leicester City": "#00529B",
+            "Liverpool": "#C8102E",
+            "Manchester City": "#6CABDD",
+            "Manchester Utd": "#DA291C",
+            "Newcastle United": "#241F20",
+            "Queens Park Rangers": "#005C9E",
+            "Southampton": "#D71920",
+            "Stoke City": "#A71930",
+            "Sunderland": "#D71920",
+            "Swansea City": "#FFC20E",
+            "Tottenham": "#132257",
+            "West Bromwich Albion": "#21409A",
+            "West Ham": "#7A263A",
+            "Wolverhampton Wanderers": "#ADB913"
         };
 
         const colorPool = d3.schemeSet3.concat(d3.schemeTableau10);
 
         d3.csv("final_dataset_2015-2024.csv").then(data => {
-            // coerce to numbers
             data.forEach(d => {
                 dimensions.slice(1).forEach(k => d[k] = +d[k]);
             });
 
-            // build scales
             dimensions.forEach(dim => {
                 if (dim === "season-end-year") {
                     const vals = [...new Set(data.map(d => d[dim]))].sort();
@@ -168,7 +180,6 @@
                 }
             });
 
-            // populate dropdowns
             const seasons = [...new Set(data.map(d => d["season-end-year"]))].sort();
             d3.select("#season-select")
                 .selectAll("option.season")
@@ -211,15 +222,12 @@
             }
 
             function render(rows) {
-                // data join
                 const sel = fg.selectAll("path")
                     .data(rows, d => d.team + "_" + d["season-end-year"]);
-                // exit
                 sel.exit()
                     .transition().duration(300)
                     .style("opacity", 0)
                     .remove();
-                // enter
                 sel.enter().append("path")
                     .attr("d", pathFn)
                     .attr("stroke", d => allColor[d.team])
@@ -260,10 +268,8 @@
                     .style("opacity", 0.6);
             }
 
-            // initial draw
             render(data);
 
-            // filter handlers
             function filter() {
                 let filtered = data;
                 const s = d3.select("#season-select").property("value");
@@ -278,9 +284,12 @@
                 d3.select("#season-select").property("value", "all");
                 d3.select("#team-select").property("value", "all");
                 filter();
+                mainGroup.selectAll(".brush")
+                    .each(function (dim) {
+                        d3.select(this).call(y[dim].brush.move, null);
+                    });
             });
 
-            // draw axes + brushes
             const dimGroups = mainGroup.selectAll(".dimension")
                 .data(dimensions).enter()
                 .append("g")
@@ -298,7 +307,8 @@
                 .attr("fill", "#000")
                 .text(dim => axisLabels[dim]);
 
-            dimGroups.append("g")
+            dimGroups.filter(dim => dim !== "season-end-year")
+                .append("g")
                 .attr("class", "brush")
                 .each(function (dim) {
                     d3.select(this).call(
@@ -326,8 +336,6 @@
                             : "none"
                     );
             }
-
-            // interactive legend
             const legend = svg.append("g")
                 .attr("transform", `translate(${width + margin.left + 20},${margin.top})`);
 
