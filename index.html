@@ -186,7 +186,14 @@
                 } else if (dim === "position") {
                     const posExtent = d3.extent(data, d => d.position);
                     y.position = d3.scaleLinear()
-                        .domain([posExtent[1], posExtent[0]])  // reverse domain!
+                        .domain([posExtent[1], posExtent[0]]) 
+                        .nice()
+                        .range([height, 0]);
+                }
+                else if (dim === "yellow_cards") {
+                    const posExtent = d3.extent(data, d => d.yellow_cards);
+                    y.yellow_cards = d3.scaleLinear()
+                        .domain([posExtent[1], posExtent[0]]) 
                         .nice()
                         .range([height, 0]);
                 }
