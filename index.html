@@ -8,6 +8,12 @@
     <style>
         body {
             font-family: sans-serif;
+            background-color: white;
+            margin: 0;
+        }
+
+        svg {
+            background-color: white;
         }
 
         .axis path,
@@ -18,8 +24,14 @@
         }
 
         .foreground path {
-            stroke: steelblue;
-            opacity: 0.7;
+            stroke-width: 1px;
+            opacity: 0.65;
+            fill: none;
+        }
+
+        .background path {
+            stroke: #eee;
+            opacity: 0.2;
             fill: none;
         }
 
@@ -28,49 +40,174 @@
             fill-opacity: 0.3;
             stroke: none;
         }
+
+        .legend rect {
+            rx: 2;
+            ry: 2;
+        }
     </style>
 </head>
 
 <body>
     <script>
-        const margin = { top: 50, right: 30, bottom: 10, left: 30 },
+        const margin = { top: 50, right: 150, bottom: 10, left: 30 },
             width = 960 - margin.left - margin.right,
             height = 500 - margin.top - margin.bottom;
 
         const svg = d3.select("body").append("svg")
             .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-            .append("g")
-            .attr("transform", `translate(${margin.left},${margin.top})`);
+            .attr("height", height + margin.top + margin.bottom);
+
+        const mainGroup = svg.append("g")
+            .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
         const dimensions = [
-            "seasonEndYear",
-            "shotsOnTarget",
-            "totalShots",
+            "season-end-year",
+            "shots_on_target",
+            "total_shots",
             "corners",
-            "goalsScored",
-            "bettingOdds",
-            "yellowCards",
-            "pointsScored"
+            "goals_scored",
+            "yellow_cards",
+            "points"
         ];
-        const x = d3.scalePoint().range([0, width]).padding(1).domain(dimensions);
+
+        const x = d3.scalePoint()
+            .range([0, width])
+            .padding(1)
+            .domain(dimensions);
+
         const y = {};
 
-        Promise.all([
-            d3.csv("pl-tables-1993-2024.csv"),      // League table dataset
-            d3.csv("Combined_data_2015-2024.csv"),       // Football-Data.co.uk dataset
-        ]).then(function (files) {
-            let leagueData = files[0];
-            let footballData = files[1];
-            let matchStatsData = files[2];
+        const teamColor = {
+            "Arsenal": "#EF0107",         // Arsenal Red
+            "Aston Villa": "#670E36",      // Villa Claret
+            "Burnley": "#8A1538",          // Burnley Claret
+            "Chelsea": "#034694",         // Chelsea Blue
+            "Crystal Palace": "#B11226",   // Palace Red 
+            "Everton": "#003399",          // Everton Blue
+            "Hull": "#FFB500",             // Hull (amber)
+            "Leicester": "#00529B",        // Leicester Blue
+            "Liverpool": "#C8102E",        // Liverpool Red
+            "Man City": "#6CABDD",         // Man City Light Blue
+            "Man United": "#DA291C",       // Man United Red
+            "Newcastle": "#241F20",        // Newcastle (black)
+            "QPR": "#005C9E",              // QPR Blue
+            "Southampton": "#D71920",      // Southampton Red
+            "Stoke": "#A71930",            // Stoke (dark red)
+            "Sunderland": "red",           // Sunderland red 
+            "Swansea": "#FFC20E",          // Swansea Gold
+            "Tottenham": "#132257",        // Tottenham Navy
+            "West Brom": "#21409A",        // West Brom Blue
+            "West Ham": "#7A263A",         // West Ham Claret
+            "Wolves": "#FDB913"            // Wolves Gold
+        };
 
-            leagueData = leagueData.filter(d => +d["season_end_year"] >= 2015 && +d["season_end_year"] <= 2024);
-            footballData = footballData.filter(d => +d["season-end-year"] >= 2015 && +d["season-end-year"] <= 2024);
+        d3.csv("final_dataset_2015-2024.csv").then(data => {
+            data.forEach(d => {
+                d["season-end-year"] = d["season-end-year"];
+                d.shots_on_target = +d.shots_on_target;
+                d.total_shots = +d.total_shots;
+                d.corners = +d.corners;
+                d.goals_scored = +d.goals_scored;
+                d.yellow_cards = +d.yellow_cards;
+                d.points = +d.points;
+            });
 
-            console.log("Filtered leagueData count:", leagueData.length);
-            console.log("Filtered footballData count:", footballData.length);
+            dimensions.forEach(dim => {
+                if (dim === "season-end-year") {
+                    const uniqueSeasons = Array.from(new Set(data.map(d => d["season-end-year"]))).sort();
+                    y[dim] = d3.scalePoint()
+                        .domain(uniqueSeasons)
+                        .range([height, 0])
+                        .padding(0.5);
+                } else {
+                    y[dim] = d3.scaleLinear()
+                        .domain(d3.extent(data, d => d[dim]))
+                        .range([height, 0]);
+                }
+            });
 
+            function path(d) {
+                return d3.line()(dimensions.map(dim => [x(dim), y[dim](d[dim])]));
+            }
+
+            const foreground = mainGroup.append("g")
+                .attr("class", "foreground")
+                .selectAll("path")
+                .data(data)
+                .enter().append("path")
+                .attr("d", path)
+                .attr("stroke", d => teamColor[d.team] || "steelblue");  // fallback color
+
+
+            const g = mainGroup.selectAll(".dimension")
+                .data(dimensions)
+                .enter().append("g")
+                .attr("class", "dimension")
+                .attr("transform", d => `translate(${x(d)})`);
+
+            g.append("g")
+                .each(function (dim) {
+                    d3.select(this).call(d3.axisLeft(y[dim]));
+                })
+                .append("text")
+                .style("text-anchor", "middle")
+                .attr("y", -9)
+                .text(dim => dim)
+                .style("fill", "black");
+
+            g.append("g")
+                .attr("class", "brush")
+                .each(function (dim) {
+                    d3.select(this).call(y[dim].brush = d3.brushY()
+                        .extent([[-10, 0], [10, height]])
+                        .on("brush end", brush));
+                });
+
+            function path(d) {
+                return d3.line()(dimensions.map(p => [x(p), y[p](d[p])]));
+            }
+
+            function brush() {
+                let actives = {};
+                mainGroup.selectAll(".brush")
+                    .filter(function (dim) { return d3.brushSelection(this); })
+                    .each(function (dim) {
+                        actives[dim] = d3.brushSelection(this).map(y[dim].invert);
+                    });
+                foreground.style("display", d => {
+                    return dimensions.every(p => {
+                        return !actives[p] || (d[p] >= actives[p][1] && d[p] <= actives[p][0]);
+                    }) ? null : "none";
+                });
+            }
+
+            const legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", `translate(${width + margin.left + 10}, ${margin.top})`);
+
+            const legendData = Object.entries(teamColor);
+
+            legendData.forEach(([teamName, colorVal], i) => {
+                const legendItem = legend.append("g")
+                    .attr("transform", `translate(0, ${i * 20})`);
+
+                legendItem.append("rect")
+                    .attr("width", 18)
+                    .attr("height", 18)
+                    .attr("fill", colorVal);
+
+                legendItem.append("text")
+                    .attr("x", 24)
+                    .attr("y", 9)
+                    .attr("dy", "0.35em")
+                    .text(teamName)
+                    .style("font-size", "12px");
+            });
         })
+            .catch(error => {
+                console.error("Error loading the CSV data: ", error);
+            });
     </script>
 </body>
 
