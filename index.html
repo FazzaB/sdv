@@ -45,6 +45,11 @@
             shape-rendering: crispEdges;
         }
 
+        .axis text {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
         .foreground path {
             fill: none;
             stroke-width: 2px;
@@ -97,8 +102,8 @@
     </div>
     <div id="tooltip" style="opacity:0;"></div>
     <script>
-        const margin = { top: 50, right: 200, bottom: 10, left: 50 },
-            width = 1200 - margin.left - margin.right,
+        const margin = { top: 50, right: 200, bottom: 10, left: 0 },
+            width = 1500 - margin.left - margin.right,
             height = 850 - margin.top - margin.bottom;
 
         const svg = d3.select("body").append("svg")
@@ -337,7 +342,7 @@
                     );
             }
             const legend = svg.append("g")
-                .attr("transform", `translate(${width + margin.left + 20},${margin.top})`);
+                .attr("transform", `translate(${width + margin.left - 80},${margin.top})`);
 
             Object.entries(allColor)
                 .sort((a, b) => a[0].localeCompare(b[0]))
@@ -356,6 +361,10 @@
                                 .transition().duration(200)
                                 .style("opacity", 0.6)
                                 .style("stroke-width", 2);
+                        })
+                        .on("click", () => {
+                            d3.select("#team-select").property("value", team);
+                            filter();
                         });
 
                     item.append("rect")
