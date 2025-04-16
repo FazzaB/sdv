@@ -341,19 +341,24 @@
                 mainGroup.selectAll(".brush")
                     .filter(function (dim) { return d3.brushSelection(this); })
                     .each(function (dim) {
-                        actives[dim] = d3.brushSelection(this).map(y[dim].invert);
+                        const [p0, p1] = d3.brushSelection(this);
+                        const v0 = y[dim].invert(p0),
+                            v1 = y[dim].invert(p1);
+                        actives[dim] = [Math.min(v0, v1), Math.max(v0, v1)];
                     });
 
                 fg.selectAll("path")
                     .style("display", d =>
                         dimensions.every(dim => {
-                            return !actives[dim]
-                                || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]);
+                            if (!actives[dim]) return true;
+                            const [lo, hi] = actives[dim];
+                            return d[dim] >= lo && d[dim] <= hi;
                         })
                             ? null
                             : "none"
                     );
             }
+
             const legend = svg.append("g")
                 .attr("transform", `translate(${width + margin.left - 80},${margin.top})`);
 
