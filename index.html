@@ -10,6 +10,7 @@
             font-family: sans-serif;
             background-color: white;
             margin: 0;
+            padding: 20px;
         }
 
         svg {
@@ -45,14 +46,28 @@
             rx: 2;
             ry: 2;
         }
+
+        .dropdown {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 
 <body>
+    <div class="dropdown">
+        <label for="season-select">Season: </label>
+        <select id="season-select">
+            <option value="all">All Seasons</option>
+        </select>
+        <label for="team-select" style="margin-left:20px;">Team: </label>
+        <select id="team-select">
+            <option value="all">All Teams</option>
+        </select>
+    </div>
     <script>
-        const margin = { top: 50, right: 150, bottom: 10, left: 30 },
+        const margin = { top: 50, right: 180, bottom: 10, left: 30 },
             width = 960 - margin.left - margin.right,
-            height = 800 - margin.top - margin.bottom;
+            height = 850 - margin.top - margin.bottom;
         const svg = d3.select("body").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom);
@@ -95,6 +110,7 @@
             "West Ham": "#7A263A",
             "Wolverhampton Wanderers": "#FDB913"
         };
+        const colorPool = d3.schemeSet3.concat(d3.schemeTableau10);
         d3.csv("final_dataset_2015-2024.csv").then(data => {
             data.forEach(d => {
                 d["season-end-year"] = d["season-end-year"];
@@ -107,29 +123,64 @@
             });
             dimensions.forEach(dim => {
                 if (dim === "season-end-year") {
-                    const uniqueSeasons = Array.from(new Set(data.map(d => d["season-end-year"]))).sort();
+                    const uniqueSeasons = [...new Set(data.map(d => d["season-end-year"]))].sort();
                     y[dim] = d3.scalePoint().domain(uniqueSeasons).range([height, 0]).padding(0.5);
                 } else {
                     y[dim] = d3.scaleLinear().domain(d3.extent(data, d => d[dim])).range([height, 0]);
                 }
             });
-            const dataTeams = Array.from(new Set(data.map(d => d.team)));
-            const missingTeams = dataTeams.filter(t => !(t in teamColor));
-            const fallback = d3.scaleOrdinal(d3.schemeSet3.concat(d3.schemeTableau10)).domain(missingTeams);
+            const allSeasons = Array.from(new Set(data.map(d => d["season-end-year"]))).sort();
+            const seasonSelect = d3.select("#season-select");
+            seasonSelect.selectAll("option.season")
+                .data(allSeasons)
+                .enter()
+                .append("option")
+                .attr("class", "season")
+                .attr("value", d => d)
+                .text(d => d);
+            const allTeams = Array.from(new Set(data.map(d => d.team))).sort();
+            const teamSelect = d3.select("#team-select");
+            teamSelect.selectAll("option.team")
+                .data(allTeams)
+                .enter()
+                .append("option")
+                .attr("class", "team")
+                .attr("value", d => d)
+                .text(d => d);
+            const missingTeams = allTeams.filter(t => !(t in teamColor));
+            const fallback = d3.scaleOrdinal(colorPool).domain(missingTeams);
             const allTeamColor = {};
-            dataTeams.forEach(team => {
-                allTeamColor[team] = teamColor[team] ? teamColor[team] : fallback(team);
+            allTeams.forEach(t => {
+                allTeamColor[t] = teamColor[t] ? teamColor[t] : fallback(t);
             });
             function path(d) {
                 return d3.line()(dimensions.map(dim => [x(dim), y[dim](d[dim])]));
             }
-            const foreground = mainGroup.append("g")
-                .attr("class", "foreground")
-                .selectAll("path")
-                .data(data)
-                .enter().append("path")
-                .attr("d", path)
-                .attr("stroke", d => allTeamColor[d.team] || "steelblue");
+            function update(filteredData) {
+                mainGroup.selectAll(".foreground").remove();
+                const foreground = mainGroup.append("g")
+                    .attr("class", "foreground")
+                    .selectAll("path")
+                    .data(filteredData)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("stroke", d => allTeamColor[d.team] || "steelblue");
+            }
+            update(data);
+            d3.select("#season-select").on("change", filterData);
+            d3.select("#team-select").on("change", filterData);
+            function filterData() {
+                const selectedSeason = d3.select("#season-select").property("value");
+                const selectedTeam = d3.select("#team-select").property("value");
+                let filtered = data;
+                if (selectedSeason !== "all") {
+                    filtered = filtered.filter(d => d["season-end-year"] === selectedSeason);
+                }
+                if (selectedTeam !== "all") {
+                    filtered = filtered.filter(d => d.team === selectedTeam);
+                }
+                update(filtered);
+            }
             const g = mainGroup.selectAll(".dimension")
                 .data(dimensions)
                 .enter().append("g")
@@ -159,7 +210,7 @@
                     .each(function (dim) {
                         actives[dim] = d3.brushSelection(this).map(y[dim].invert);
                     });
-                foreground.style("display", d => {
+                mainGroup.selectAll(".foreground path").style("display", d => {
                     return dimensions.every(dim => {
                         return !actives[dim] || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]);
                     }) ? null : "none";
@@ -168,20 +219,22 @@
             const legend = svg.append("g")
                 .attr("class", "legend")
                 .attr("transform", `translate(${width + margin.left + 10}, ${margin.top})`);
-            Object.entries(allTeamColor).sort((a, b) => a[0].localeCompare(b[0])).forEach(([teamName, colorVal], i) => {
-                const legendItem = legend.append("g")
-                    .attr("transform", `translate(0, ${i * 20})`);
-                legendItem.append("rect")
-                    .attr("width", 18)
-                    .attr("height", 18)
-                    .attr("fill", colorVal);
-                legendItem.append("text")
-                    .attr("x", 24)
-                    .attr("y", 9)
-                    .attr("dy", "0.35em")
-                    .text(teamName)
-                    .style("font-size", "12px");
-            });
+            Object.entries(allTeamColor)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .forEach(([teamName, colorVal], i) => {
+                    const legendItem = legend.append("g")
+                        .attr("transform", `translate(0, ${i * 20})`);
+                    legendItem.append("rect")
+                        .attr("width", 18)
+                        .attr("height", 18)
+                        .attr("fill", colorVal);
+                    legendItem.append("text")
+                        .attr("x", 24)
+                        .attr("y", 9)
+                        .attr("dy", "0.35em")
+                        .text(teamName)
+                        .style("font-size", "12px");
+                });
         })
             .catch(error => { console.error("Error loading the CSV data:", error); });
     </script>
