@@ -28,12 +28,7 @@
             stroke-width: 2px;
             opacity: 0.65;
             fill: none;
-        }
-
-        .background path {
-            stroke: #eee;
-            opacity: 0.2;
-            fill: none;
+            transition: stroke-width 0.2s ease;
         }
 
         .brush .selection {
@@ -49,7 +44,7 @@
 
         #tooltip {
             position: absolute;
-            background-color: rgba(255, 255, 255, 0.9);
+            background-color: rgba(255, 255, 255, 0.95);
             border: 1px solid #ccc;
             padding: 8px;
             font-size: 12px;
@@ -57,30 +52,61 @@
             border-radius: 4px;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
         }
+
+        .dropdown-container {
+            margin-bottom: 10px;
+        }
+
+        select {
+            padding: 5px;
+            font-size: 14px;
+            margin-right: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 6px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #e0e0e0;
+        }
     </style>
 </head>
 
 <body>
-    <div id="tooltip" style="opacity:0;"></div>
-    <div class="dropdown">
+    <div class="dropdown-container">
         <label for="season-select">Season: </label>
         <select id="season-select">
             <option value="all">All Seasons</option>
         </select>
-        <label for="team-select" style="margin-left:20px;">Team: </label>
+        <label for="team-select">Team: </label>
         <select id="team-select">
             <option value="all">All Teams</option>
         </select>
+        <button id="reset-btn">Reset Filters</button>
     </div>
+
+    <div id="tooltip" style="opacity:0;"></div>
+
     <script>
-        const margin = { top: 50, right: 150, bottom: 10, left: 30 },
+        const margin = { top: 50, right: 180, bottom: 10, left: 30 },
             width = 1200 - margin.left - margin.right,
             height = 850 - margin.top - margin.bottom;
+
         const svg = d3.select("body").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom);
+
         const mainGroup = svg.append("g")
             .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
         const dimensions = [
             "season-end-year",
             "total_shots",
@@ -90,11 +116,24 @@
             "yellow_cards",
             "points"
         ];
+
+        const axisLabels = {
+            "season-end-year": "Season",
+            "total_shots": "Total Shots",
+            "shots_on_target": "Shots On Target",
+            "corners": "Corners",
+            "goals_scored": "Goals Scored",
+            "yellow_cards": "Yellow Cards",
+            "points": "Points"
+        };
+
         const x = d3.scalePoint()
             .range([0, width])
             .padding(1)
             .domain(dimensions);
+
         const y = {};
+
         const teamColor = {
             "Arsenal": "#EF0107",
             "Aston Villa": "#670E36",
@@ -118,7 +157,10 @@
             "West Ham": "#7A263A",
             "Wolverhampton Wanderers": "#FDB913"
         };
+
+        // Fallback color pool for teams not in teamColor
         const colorPool = d3.schemeSet3.concat(d3.schemeTableau10);
+
         d3.csv("final_dataset_2015-2024.csv").then(data => {
             data.forEach(d => {
                 d["season-end-year"] = d["season-end-year"];
@@ -129,6 +171,8 @@
                 d.yellow_cards = +d.yellow_cards;
                 d.points = +d.points;
             });
+
+            // Y scales
             dimensions.forEach(dim => {
                 if (dim === "season-end-year") {
                     const uniqueSeasons = [...new Set(data.map(d => d["season-end-year"]))].sort();
@@ -137,55 +181,85 @@
                     y[dim] = d3.scaleLinear().domain(d3.extent(data, d => d[dim])).range([height, 0]);
                 }
             });
-            const allSeasons = Array.from(new Set(data.map(d => d["season-end-year"]))).sort();
-            const seasonSelect = d3.select("#season-select");
-            seasonSelect.selectAll("option.season")
+
+            // Build dropdowns
+            const allSeasons = [...new Set(data.map(d => d["season-end-year"]))].sort();
+            d3.select("#season-select").selectAll("option.season")
                 .data(allSeasons)
                 .enter()
                 .append("option")
                 .attr("class", "season")
                 .attr("value", d => d)
                 .text(d => d);
-            const allTeams = Array.from(new Set(data.map(d => d.team))).sort();
-            const teamSelect = d3.select("#team-select");
-            teamSelect.selectAll("option.team")
+
+            const allTeams = [...new Set(data.map(d => d.team))].sort();
+            d3.select("#team-select").selectAll("option.team")
                 .data(allTeams)
                 .enter()
                 .append("option")
                 .attr("class", "team")
                 .attr("value", d => d)
                 .text(d => d);
+
+            // Fallback colors for missing teams
             const missingTeams = allTeams.filter(t => !(t in teamColor));
-            const fallback = d3.scaleOrdinal(colorPool).domain(missingTeams);
+            const fallbackScale = d3.scaleOrdinal(colorPool).domain(missingTeams);
             const allTeamColor = {};
-            allTeams.forEach(t => { allTeamColor[t] = teamColor[t] ? teamColor[t] : fallback(t); });
+            allTeams.forEach(t => {
+                allTeamColor[t] = teamColor[t] || fallbackScale(t);
+            });
+
+            const tooltip = d3.select("#tooltip");
+
             function path(d) {
                 return d3.line()(dimensions.map(dim => [x(dim), y[dim](d[dim])]));
             }
+
+            // Main update function (filter + re-draw)
             function update(filteredData) {
                 mainGroup.selectAll(".foreground").remove();
+
                 const foreground = mainGroup.append("g")
                     .attr("class", "foreground")
                     .selectAll("path")
-                    .data(filteredData)
-                    .enter().append("path")
+                    .data(filteredData, d => d.team + "_" + d["season-end-year"]);
+
+                // Enter new lines
+                foreground.enter().append("path")
                     .attr("d", path)
                     .attr("stroke", d => allTeamColor[d.team] || "steelblue")
                     .on("mouseover", (event, d) => {
+                        d3.select(event.currentTarget).raise().style("stroke-width", 4).style("opacity", 1);
                         tooltip.transition().duration(200).style("opacity", 0.9);
                         tooltip.html(
-                            `<strong>${d.team}</strong><br/>Season: ${d["season-end-year"]}<br/>Shots on Target: ${d.shots_on_target}<br/>Total Shots: ${d.total_shots}<br/>Corners: ${d.corners}<br/>Goals Scored: ${d.goals_scored}<br/>Yellow Cards: ${d.yellow_cards}<br/>Points: ${d.points}`
-                        )
-                            .style("left", (event.pageX + 10) + "px")
+                            `<strong>${d.team}</strong><br/>Season: ${d["season-end-year"]}<br/>
+              Total Shots: ${d.total_shots}<br/>Shots On Target: ${d.shots_on_target}<br/>
+              Corners: ${d.corners}<br/>Goals Scored: ${d.goals_scored}<br/>
+              Yellow Cards: ${d.yellow_cards}<br/>Points: ${d.points}`
+                        ).style("left", (event.pageX + 10) + "px")
                             .style("top", (event.pageY - 28) + "px");
                     })
-                    .on("mouseout", () => {
+                    .on("mousemove", (event) => {
+                        tooltip.style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", (event) => {
+                        d3.select(event.currentTarget).style("stroke-width", 2).style("opacity", 0.65);
                         tooltip.transition().duration(500).style("opacity", 0);
                     });
             }
+
+            // Initial drawing
             update(data);
+
             d3.select("#season-select").on("change", filterData);
             d3.select("#team-select").on("change", filterData);
+            d3.select("#reset-btn").on("click", () => {
+                d3.select("#season-select").property("value", "all");
+                d3.select("#team-select").property("value", "all");
+                update(data);
+            });
+
             function filterData() {
                 const selectedSeason = d3.select("#season-select").property("value");
                 const selectedTeam = d3.select("#team-select").property("value");
@@ -198,11 +272,14 @@
                 }
                 update(filtered);
             }
+
+            // Axes
             const g = mainGroup.selectAll(".dimension")
                 .data(dimensions)
                 .enter().append("g")
                 .attr("class", "dimension")
                 .attr("transform", d => `translate(${x(d)})`);
+
             g.append("g")
                 .attr("class", "axis")
                 .each(function (dim) {
@@ -211,44 +288,47 @@
                 .append("text")
                 .style("text-anchor", "middle")
                 .attr("y", -9)
-                .text(dim => dim)
+                .text(dim => axisLabels[dim] || dim)
                 .style("fill", "black");
-            g.append("g")
-                .attr("class", "brush")
-                .each(function (dim) {
-                    d3.select(this).call(y[dim].brush = d3.brushY()
-                        .extent([[-10, 0], [10, height]])
-                        .on("brush end", brush));
-                });
-            function brush() {
-                let actives = {};
-                mainGroup.selectAll(".brush")
-                    .filter(function (dim) { return d3.brushSelection(this); })
-                    .each(function (dim) { actives[dim] = d3.brushSelection(this).map(y[dim].invert); });
-                mainGroup.selectAll(".foreground path").style("display", d => {
-                    return dimensions.every(dim => { return !actives[dim] || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]); }) ? null : "none";
-                });
-            }
+
+            // No brush or interactive legend for performance reasons
+            // If you prefer, remove or comment out the brush code below
+
+            // Simple static legend with hover highlight
             const legend = svg.append("g")
                 .attr("class", "legend")
-                .attr("transform", `translate(${width + margin.left + 10}, ${margin.top})`);
-            Object.entries(allTeamColor).sort((a, b) => a[0].localeCompare(b[0])).forEach(([teamName, colorVal], i) => {
-                const legendItem = legend.append("g")
-                    .attr("transform", `translate(0, ${i * 20})`);
-                legendItem.append("rect")
-                    .attr("width", 18)
-                    .attr("height", 18)
-                    .attr("fill", colorVal);
-                legendItem.append("text")
-                    .attr("x", 24)
-                    .attr("y", 9)
-                    .attr("dy", "0.35em")
-                    .text(teamName)
-                    .style("font-size", "12px");
-            });
-            const tooltip = d3.select("body").append("div")
-                .attr("id", "tooltip")
-                .style("opacity", 0);
+                .attr("transform", `translate(${width + margin.left + 20}, ${margin.top})`);
+
+            Object.entries(allTeamColor)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .forEach(([teamName, colorVal], i) => {
+                    const legendItem = legend.append("g")
+                        .attr("transform", `translate(0, ${i * 20})`)
+                        .on("mouseover", () => {
+                            mainGroup.selectAll(".foreground path")
+                                .transition().duration(200)
+                                .style("opacity", d => d.team === teamName ? 1 : 0.05)
+                                .style("stroke-width", d => d.team === teamName ? 4 : 2);
+                        })
+                        .on("mouseout", () => {
+                            mainGroup.selectAll(".foreground path")
+                                .transition().duration(200)
+                                .style("opacity", 0.65)
+                                .style("stroke-width", 2);
+                        });
+
+                    legendItem.append("rect")
+                        .attr("width", 18)
+                        .attr("height", 18)
+                        .attr("fill", colorVal);
+
+                    legendItem.append("text")
+                        .attr("x", 24)
+                        .attr("y", 9)
+                        .attr("dy", "0.35em")
+                        .text(teamName)
+                        .style("font-size", "12px");
+                });
         })
             .catch(error => { console.error("Error loading the CSV data:", error); });
     </script>
