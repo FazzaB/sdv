@@ -52,15 +52,12 @@
     <script>
         const margin = { top: 50, right: 150, bottom: 10, left: 30 },
             width = 960 - margin.left - margin.right,
-            height = 500 - margin.top - margin.bottom;
-
+            height = 800 - margin.top - margin.bottom;
         const svg = d3.select("body").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom);
-
         const mainGroup = svg.append("g")
             .attr("transform", `translate(${margin.left}, ${margin.top})`);
-
         const dimensions = [
             "season-end-year",
             "shots_on_target",
@@ -70,38 +67,34 @@
             "yellow_cards",
             "points"
         ];
-
         const x = d3.scalePoint()
             .range([0, width])
             .padding(1)
             .domain(dimensions);
-
         const y = {};
-
         const teamColor = {
-            "Arsenal": "#EF0107",         // Arsenal Red
-            "Aston Villa": "#670E36",      // Villa Claret
-            "Burnley": "#8A1538",          // Burnley Claret
-            "Chelsea": "#034694",         // Chelsea Blue
-            "Crystal Palace": "#B11226",   // Palace Red 
-            "Everton": "#003399",          // Everton Blue
-            "Hull": "#FFB500",             // Hull (amber)
-            "Leicester": "#00529B",        // Leicester Blue
-            "Liverpool": "#C8102E",        // Liverpool Red
-            "Man City": "#6CABDD",         // Man City Light Blue
-            "Man United": "#DA291C",       // Man United Red
-            "Newcastle": "#241F20",        // Newcastle (black)
-            "QPR": "#005C9E",              // QPR Blue
-            "Southampton": "#D71920",      // Southampton Red
-            "Stoke": "#A71930",            // Stoke (dark red)
-            "Sunderland": "red",           // Sunderland red 
-            "Swansea": "#FFC20E",          // Swansea Gold
-            "Tottenham": "#132257",        // Tottenham Navy
-            "West Brom": "#21409A",        // West Brom Blue
-            "West Ham": "#7A263A",         // West Ham Claret
-            "Wolves": "#FDB913"            // Wolves Gold
+            "Arsenal": "#EF0107",
+            "Aston Villa": "#670E36",
+            "Burnley": "#8A1538",
+            "Chelsea": "#034694",
+            "Crystal Palace": "#B11226",
+            "Everton": "#003399",
+            "Hull City": "#FFB500",
+            "Leicester City": "#00529B",
+            "Liverpool": "#C8102E",
+            "Manchester City": "#6CABDD",
+            "Manchester Utd": "#DA291C",
+            "Newcastle United": "#241F20",
+            "Queens Park Rangers": "#005C9E",
+            "Southampton": "#D71920",
+            "Stoke City": "#A71930",
+            "Sunderland": "red",
+            "Swansea City": "#FFC20E",
+            "Tottenham": "#132257",
+            "West Bromwich Albion": "#21409A",
+            "West Ham": "#7A263A",
+            "Wolverhampton Wanderers": "#FDB913"
         };
-
         d3.csv("final_dataset_2015-2024.csv").then(data => {
             data.forEach(d => {
                 d["season-end-year"] = d["season-end-year"];
@@ -112,41 +105,38 @@
                 d.yellow_cards = +d.yellow_cards;
                 d.points = +d.points;
             });
-
             dimensions.forEach(dim => {
                 if (dim === "season-end-year") {
                     const uniqueSeasons = Array.from(new Set(data.map(d => d["season-end-year"]))).sort();
-                    y[dim] = d3.scalePoint()
-                        .domain(uniqueSeasons)
-                        .range([height, 0])
-                        .padding(0.5);
+                    y[dim] = d3.scalePoint().domain(uniqueSeasons).range([height, 0]).padding(0.5);
                 } else {
-                    y[dim] = d3.scaleLinear()
-                        .domain(d3.extent(data, d => d[dim]))
-                        .range([height, 0]);
+                    y[dim] = d3.scaleLinear().domain(d3.extent(data, d => d[dim])).range([height, 0]);
                 }
             });
-
+            const dataTeams = Array.from(new Set(data.map(d => d.team)));
+            const missingTeams = dataTeams.filter(t => !(t in teamColor));
+            const fallback = d3.scaleOrdinal(d3.schemeSet3.concat(d3.schemeTableau10)).domain(missingTeams);
+            const allTeamColor = {};
+            dataTeams.forEach(team => {
+                allTeamColor[team] = teamColor[team] ? teamColor[team] : fallback(team);
+            });
             function path(d) {
                 return d3.line()(dimensions.map(dim => [x(dim), y[dim](d[dim])]));
             }
-
             const foreground = mainGroup.append("g")
                 .attr("class", "foreground")
                 .selectAll("path")
                 .data(data)
                 .enter().append("path")
                 .attr("d", path)
-                .attr("stroke", d => teamColor[d.team] || "steelblue");  // fallback color
-
-
+                .attr("stroke", d => allTeamColor[d.team] || "steelblue");
             const g = mainGroup.selectAll(".dimension")
                 .data(dimensions)
                 .enter().append("g")
                 .attr("class", "dimension")
                 .attr("transform", d => `translate(${x(d)})`);
-
             g.append("g")
+                .attr("class", "axis")
                 .each(function (dim) {
                     d3.select(this).call(d3.axisLeft(y[dim]));
                 })
@@ -155,7 +145,6 @@
                 .attr("y", -9)
                 .text(dim => dim)
                 .style("fill", "black");
-
             g.append("g")
                 .attr("class", "brush")
                 .each(function (dim) {
@@ -163,11 +152,6 @@
                         .extent([[-10, 0], [10, height]])
                         .on("brush end", brush));
                 });
-
-            function path(d) {
-                return d3.line()(dimensions.map(p => [x(p), y[p](d[p])]));
-            }
-
             function brush() {
                 let actives = {};
                 mainGroup.selectAll(".brush")
@@ -176,27 +160,21 @@
                         actives[dim] = d3.brushSelection(this).map(y[dim].invert);
                     });
                 foreground.style("display", d => {
-                    return dimensions.every(p => {
-                        return !actives[p] || (d[p] >= actives[p][1] && d[p] <= actives[p][0]);
+                    return dimensions.every(dim => {
+                        return !actives[dim] || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]);
                     }) ? null : "none";
                 });
             }
-
             const legend = svg.append("g")
                 .attr("class", "legend")
                 .attr("transform", `translate(${width + margin.left + 10}, ${margin.top})`);
-
-            const legendData = Object.entries(teamColor);
-
-            legendData.forEach(([teamName, colorVal], i) => {
+            Object.entries(allTeamColor).sort((a, b) => a[0].localeCompare(b[0])).forEach(([teamName, colorVal], i) => {
                 const legendItem = legend.append("g")
                     .attr("transform", `translate(0, ${i * 20})`);
-
                 legendItem.append("rect")
                     .attr("width", 18)
                     .attr("height", 18)
                     .attr("fill", colorVal);
-
                 legendItem.append("text")
                     .attr("x", 24)
                     .attr("y", 9)
@@ -205,9 +183,7 @@
                     .style("font-size", "12px");
             });
         })
-            .catch(error => {
-                console.error("Error loading the CSV data: ", error);
-            });
+            .catch(error => { console.error("Error loading the CSV data:", error); });
     </script>
 </body>
 
