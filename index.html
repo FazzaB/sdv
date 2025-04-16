@@ -25,7 +25,7 @@
         }
 
         .foreground path {
-            stroke-width: 1px;
+            stroke-width: 2px;
             opacity: 0.65;
             fill: none;
         }
@@ -47,13 +47,21 @@
             ry: 2;
         }
 
-        .dropdown {
-            margin-bottom: 10px;
+        #tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            padding: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            border-radius: 4px;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
 
 <body>
+    <div id="tooltip" style="opacity:0;"></div>
     <div class="dropdown">
         <label for="season-select">Season: </label>
         <select id="season-select">
@@ -65,8 +73,8 @@
         </select>
     </div>
     <script>
-        const margin = { top: 50, right: 180, bottom: 10, left: 30 },
-            width = 960 - margin.left - margin.right,
+        const margin = { top: 50, right: 150, bottom: 10, left: 30 },
+            width = 1200 - margin.left - margin.right,
             height = 850 - margin.top - margin.bottom;
         const svg = d3.select("body").append("svg")
             .attr("width", width + margin.left + margin.right)
@@ -75,8 +83,8 @@
             .attr("transform", `translate(${margin.left}, ${margin.top})`);
         const dimensions = [
             "season-end-year",
-            "shots_on_target",
             "total_shots",
+            "shots_on_target",
             "corners",
             "goals_scored",
             "yellow_cards",
@@ -150,9 +158,7 @@
             const missingTeams = allTeams.filter(t => !(t in teamColor));
             const fallback = d3.scaleOrdinal(colorPool).domain(missingTeams);
             const allTeamColor = {};
-            allTeams.forEach(t => {
-                allTeamColor[t] = teamColor[t] ? teamColor[t] : fallback(t);
-            });
+            allTeams.forEach(t => { allTeamColor[t] = teamColor[t] ? teamColor[t] : fallback(t); });
             function path(d) {
                 return d3.line()(dimensions.map(dim => [x(dim), y[dim](d[dim])]));
             }
@@ -164,7 +170,18 @@
                     .data(filteredData)
                     .enter().append("path")
                     .attr("d", path)
-                    .attr("stroke", d => allTeamColor[d.team] || "steelblue");
+                    .attr("stroke", d => allTeamColor[d.team] || "steelblue")
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", 0.9);
+                        tooltip.html(
+                            `<strong>${d.team}</strong><br/>Season: ${d["season-end-year"]}<br/>Shots on Target: ${d.shots_on_target}<br/>Total Shots: ${d.total_shots}<br/>Corners: ${d.corners}<br/>Goals Scored: ${d.goals_scored}<br/>Yellow Cards: ${d.yellow_cards}<br/>Points: ${d.points}`
+                        )
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", () => {
+                        tooltip.transition().duration(500).style("opacity", 0);
+                    });
             }
             update(data);
             d3.select("#season-select").on("change", filterData);
@@ -207,34 +224,31 @@
                 let actives = {};
                 mainGroup.selectAll(".brush")
                     .filter(function (dim) { return d3.brushSelection(this); })
-                    .each(function (dim) {
-                        actives[dim] = d3.brushSelection(this).map(y[dim].invert);
-                    });
+                    .each(function (dim) { actives[dim] = d3.brushSelection(this).map(y[dim].invert); });
                 mainGroup.selectAll(".foreground path").style("display", d => {
-                    return dimensions.every(dim => {
-                        return !actives[dim] || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]);
-                    }) ? null : "none";
+                    return dimensions.every(dim => { return !actives[dim] || (d[dim] >= actives[dim][1] && d[dim] <= actives[dim][0]); }) ? null : "none";
                 });
             }
             const legend = svg.append("g")
                 .attr("class", "legend")
                 .attr("transform", `translate(${width + margin.left + 10}, ${margin.top})`);
-            Object.entries(allTeamColor)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .forEach(([teamName, colorVal], i) => {
-                    const legendItem = legend.append("g")
-                        .attr("transform", `translate(0, ${i * 20})`);
-                    legendItem.append("rect")
-                        .attr("width", 18)
-                        .attr("height", 18)
-                        .attr("fill", colorVal);
-                    legendItem.append("text")
-                        .attr("x", 24)
-                        .attr("y", 9)
-                        .attr("dy", "0.35em")
-                        .text(teamName)
-                        .style("font-size", "12px");
-                });
+            Object.entries(allTeamColor).sort((a, b) => a[0].localeCompare(b[0])).forEach(([teamName, colorVal], i) => {
+                const legendItem = legend.append("g")
+                    .attr("transform", `translate(0, ${i * 20})`);
+                legendItem.append("rect")
+                    .attr("width", 18)
+                    .attr("height", 18)
+                    .attr("fill", colorVal);
+                legendItem.append("text")
+                    .attr("x", 24)
+                    .attr("y", 9)
+                    .attr("dy", "0.35em")
+                    .text(teamName)
+                    .style("font-size", "12px");
+            });
+            const tooltip = d3.select("body").append("div")
+                .attr("id", "tooltip")
+                .style("opacity", 0);
         })
             .catch(error => { console.error("Error loading the CSV data:", error); });
     </script>
