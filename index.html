@@ -183,7 +183,14 @@
                         .domain(vals)
                         .range([height, 0])
                         .padding(0.5);
-                } else {
+                } else if (dim === "position") {
+                    const posExtent = d3.extent(data, d => d.position);
+                    y.position = d3.scaleLinear()
+                        .domain([posExtent[1], posExtent[0]])  // reverse domain!
+                        .nice()
+                        .range([height, 0]);
+                }
+                else {
                     y[dim] = d3.scaleLinear()
                         .domain(d3.extent(data, d => d[dim])).nice()
                         .range([height, 0]);
