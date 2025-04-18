@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Parallel Coordinates Plot</title>
+    <title>Parallel Coordinates Plot + Small Multiples</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
@@ -83,6 +83,16 @@
             font-size: 12px;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
         }
+
+        #small-multiples {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        #small-multiples svg {
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 
@@ -100,7 +110,9 @@
         </label>
         <button id="reset-btn">Reset Filters</button>
     </div>
+
     <div id="tooltip" style="opacity:0;"></div>
+
     <script>
         const margin = { top: 50, right: 200, bottom: 10, left: 0 },
             width = 1500 - margin.left - margin.right,
@@ -189,15 +201,13 @@
                         .domain([posExtent[1], posExtent[0]]) 
                         .nice()
                         .range([height, 0]);
-                }
-                else if (dim === "yellow_cards") {
-                    const posExtent = d3.extent(data, d => d.yellow_cards);
+                } else if (dim === "yellow_cards") {
+                    const ycExtent = d3.extent(data, d => d.yellow_cards);
                     y.yellow_cards = d3.scaleLinear()
-                        .domain([posExtent[1], posExtent[0]]) 
+                        .domain([ycExtent[1], ycExtent[0]])
                         .nice()
                         .range([height, 0]);
-                }
-                else {
+                } else {
                     y[dim] = d3.scaleLinear()
                         .domain(d3.extent(data, d => d[dim])).nice()
                         .range([height, 0]);
@@ -223,14 +233,14 @@
                 .text(d => d);
 
             // fallback colors
-            const missing = teams.filter(t => !teamColor[t]);
+            const missing = teams.filter(t => !(t in teamColor));
             const fallback = d3.scaleOrdinal(colorPool).domain(missing);
             const allColor = {};
             teams.forEach(t => allColor[t] = teamColor[t] || fallback(t));
 
             const tooltip = d3.select("#tooltip");
 
-            // draw static background
+            // draw background
             mainGroup.append("g")
                 .attr("class", "background")
                 .selectAll("path")
@@ -278,7 +288,8 @@
                             .style("top", (e.pageY - 28) + "px");
                     })
                     .on("mousemove", e => {
-                        tooltip.style("left", (e.pageX + 10) + "px")
+                        tooltip
+                            .style("left", (e.pageX + 10) + "px")
                             .style("top", (e.pageY - 28) + "px");
                     })
                     .on("mouseout", e => {
@@ -387,7 +398,7 @@
                                 .style("opacity", 0.6)
                                 .style("stroke-width", 2);
                         })
-                        .on("click", () => {
+                        .on("click", () => {  // also filter on click
                             d3.select("#team-select").property("value", team);
                             filter();
                         });
@@ -402,7 +413,73 @@
                         .style("font-size", "12px");
                 });
 
-        }).catch(err => console.error(err));
+            const smallTeams = ["Arsenal", "Chelsea", "Liverpool", "Manchester City"];
+            const smW = 200, smH = 120;
+            const smM = { t: 20, r: 10, b: 30, l: 30 };
+
+            d3.select("body")
+                .append("div").attr("id", "small-multiples")
+                .style("display", "flex")
+                .style("gap", "20px")
+                .style("margin-top", "30px");
+
+            smallTeams.forEach(team => {
+                const td = data
+                    .filter(d => d.team === team)
+                    .sort((a, b) => +a["season-end-year"] - +b["season-end-year"]);
+
+                const sx = d3.scaleLinear()
+                    .domain(d3.extent(td, d => +d["season-end-year"]))
+                    .range([smM.l, smW - smM.r]);
+
+                const sy = d3.scaleLinear()
+                    .domain(d3.extent(td, d => d.goals_scored))
+                    .range([smH - smM.b, smM.t]);
+
+                const svgSm = d3.select("#small-multiples")
+                    .append("svg")
+                    .attr("width", smW)
+                    .attr("height", smH);
+
+                svgSm.append("path")
+                    .datum(td)
+                    .attr("fill", "none")
+                    .attr("stroke", allColor[team])
+                    .attr("d", d3.line()
+                        .x(d => sx(+d["season-end-year"]))
+                        .y(d => sy(d.goals_scored)));
+
+                const n = td.length,
+                    sumX = d3.sum(td, d => +d["season-end-year"]),
+                    sumY = d3.sum(td, d => d.goals_scored),
+                    sumXY = d3.sum(td, d => +d["season-end-year"] * d.goals_scored),
+                    sumX2 = d3.sum(td, d => (+d["season-end-year"]) ** 2),
+                    m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX),
+                    b = (sumY - m * sumX) / n,
+                    xExt = d3.extent(td, d => +d["season-end-year"]);
+
+                svgSm.append("line")
+                    .attr("x1", sx(xExt[0])).attr("y1", sy(m * xExt[0] + b))
+                    .attr("x2", sx(xExt[1])).attr("y2", sy(m * xExt[1] + b))
+                    .attr("stroke", "black")
+                    .attr("stroke-dasharray", "3,2");
+
+                svgSm.append("g")
+                    .attr("transform", `translate(0,${smH - smM.b})`)
+                    .call(d3.axisBottom(sx).ticks(4).tickFormat(d3.format("d")).tickSize(3));
+
+                svgSm.append("g")
+                    .attr("transform", `translate(${smM.l},0)`)
+                    .call(d3.axisLeft(sy).ticks(4).tickSize(3));
+
+                svgSm.append("text")
+                    .attr("x", smM.l).attr("y", smM.t - 5)
+                    .text(team)
+                    .style("font-size", "12px")
+                    .style("font-weight", "bold");
+            });
+        })
+            .catch(err => console.error(err));
     </script>
 </body>
 
