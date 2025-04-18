@@ -121,6 +121,29 @@
         .checkbox-list input {
             margin-right: 6px;
         }
+
+        .dropdown-container {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .trends-container {
+            display: flex;
+            flex-direction: column;
+            font-size: 13px;
+        }
+
+        .trends-container label {
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        .trends-container button {
+            margin-top: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
     </style>
 </head>
 
@@ -137,10 +160,11 @@
             </select>
         </label>
         <button id="reset-btn">Reset Filters</button>
-        <label style="margin-left:20px; vertical-align: top;">
-            Pick teams for trends:
+        <div class="trends-container">
+            <label>Pick teams for trends:</label>
             <div id="sm-container" class="checkbox-list"></div>
-        </label>
+            <button id="clear-trends" type="button">Clear All</button>
+        </div>
     </div>
 
     <svg id="parallel" width="1400" height="850"></svg>
@@ -152,7 +176,7 @@
             width = 1500 - margin.left - margin.right,
             height = 850 - margin.top - margin.bottom;
 
-            const svg = d3.select("#parallel");
+        const svg = d3.select("#parallel");
 
         const mainGroup = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
@@ -282,6 +306,13 @@
                         });
                     lbl.append("span").text(d);
                 });
+            d3.select("#clear-trends")
+                .on("click", () => {
+                    d3.selectAll("#sm-container input")
+                        .property("checked", false);
+                    drawSmallMultiples([]);
+                });
+
 
             const missing = teams.filter(t => !(t in teamColor));
             const fallback = d3.scaleOrdinal(colorPool).domain(missing);
