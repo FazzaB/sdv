@@ -144,10 +144,18 @@
             padding: 4px 8px;
             font-size: 12px;
         }
+
+        .main-title {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 28px;
+            font-weight: bold;
+        }
     </style>
 </head>
 
 <body>
+    <h1 class="main-title">EPL Team Performance Dashboard (2015–2024)</h1>
     <div class="dropdown-container">
         <label>Season:
             <select id="season-select">
@@ -168,7 +176,13 @@
     </div>
 
     <svg id="parallel" width="1400" height="850"></svg>
+    <div id="small-multiples-title" style="display: none; margin-top: 20px;">
+        <h3>Seasonal Goals Trends</h3>
+        <p>Each small chart shows how many goals each selected team scored in each season (2015–2024), with a dashed
+            line indicating the overall trend.</p>
+    </div>
     <div id="small-multiples"></div>
+
     <div id="tooltip" style="opacity:0;"></div>
 
     <script>
@@ -493,6 +507,12 @@
             drawSmallMultiples(defaultSM);
 
             function drawSmallMultiples(teamList) {
+                const title = d3.select("#small-multiples-title");
+                if (teamList.length) {
+                    title.style("display", "block");
+                } else {
+                    title.style("display", "none");
+                }
                 const container = d3.select("#small-multiples");
                 container.selectAll("*").remove();
                 const smW = 180, smH = 100, smM = { t: 10, l: 30, b: 20, r: 10 };
