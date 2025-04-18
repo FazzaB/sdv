@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Parallel Coordinates Plot + Small Multiples</title>
+    <title>Parallel Coordinates Plot</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
@@ -35,8 +35,25 @@
             background-color: #e0e0e0;
         }
 
-        svg {
-            background-color: #fff;
+        svg#parallel {
+            display: block;
+            margin: 0 auto;
+            background: #fff;
+        }
+
+        #small-multiples {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        #small-multiples svg {
+            border: 1px solid #ddd;
+        }
+
+        #sm-select {
+            width: 160px;
+            vertical-align: middle;
         }
 
         .axis path,
@@ -50,17 +67,17 @@
             font-weight: bold;
         }
 
+        .background path {
+            fill: none;
+            stroke: #eee;
+            opacity: 0.3;
+        }
+
         .foreground path {
             fill: none;
             stroke-width: 2px;
             opacity: 0.6;
             transition: stroke-width 0.2s, opacity 0.2s;
-        }
-
-        .background path {
-            fill: none;
-            stroke: #eee;
-            opacity: 0.3;
         }
 
         .brush .selection {
@@ -84,14 +101,25 @@
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
         }
 
-        #small-multiples {
-            display: flex;
-            gap: 20px;
-            margin-top: 30px;
+        .checkbox-list {
+            display: inline‑block;
+            border: 1px solid #ccc;
+            padding: 6px;
+            width: 160px;
+            height: 120px;
+            overflow-y: auto;
+            background: #fafafa;
         }
 
-        #small-multiples svg {
-            border: 1px solid #ddd;
+        .checkbox-list label {
+            display: block;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .checkbox-list input {
+            margin-right: 6px;
         }
     </style>
 </head>
@@ -109,8 +137,14 @@
             </select>
         </label>
         <button id="reset-btn">Reset Filters</button>
+        <label style="margin-left:20px; vertical-align: top;">
+            Pick teams for trends:
+            <div id="sm-container" class="checkbox-list"></div>
+        </label>
     </div>
 
+    <svg id="parallel" width="1400" height="850"></svg>
+    <div id="small-multiples"></div>
     <div id="tooltip" style="opacity:0;"></div>
 
     <script>
@@ -118,12 +152,12 @@
             width = 1500 - margin.left - margin.right,
             height = 850 - margin.top - margin.bottom;
 
-        const svg = d3.select("body").append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom);
+            const svg = d3.select("#parallel");
 
         const mainGroup = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const defaultSM = ["Arsenal", "Chelsea", "Liverpool", "Manchester City"];
 
         const dimensions = [
             "season-end-year",
@@ -135,7 +169,6 @@
             "points",
             "position"
         ];
-
         const axisLabels = {
             "season-end-year": "Season End Year",
             "total_shots": "Total Shots",
@@ -198,7 +231,7 @@
                 } else if (dim === "position") {
                     const posExtent = d3.extent(data, d => d.position);
                     y.position = d3.scaleLinear()
-                        .domain([posExtent[1], posExtent[0]]) 
+                        .domain([posExtent[1], posExtent[0]])
                         .nice()
                         .range([height, 0]);
                 } else if (dim === "yellow_cards") {
@@ -232,7 +265,24 @@
                 .attr("value", d => d)
                 .text(d => d);
 
-            // fallback colors
+            const smCont = d3.select("#sm-container");
+            smCont.selectAll("label")
+                .data(teams)
+                .enter()
+                .append("label")
+                .each(function (d) {
+                    const lbl = d3.select(this);
+                    lbl.append("input")
+                        .attr("type", "checkbox")
+                        .attr("value", d)
+                        .property("checked", defaultSM.includes(d))
+                        .on("change", () => {
+                            const chosen = smCont.selectAll("input:checked").nodes().map(n => n.value);
+                            drawSmallMultiples(chosen);
+                        });
+                    lbl.append("span").text(d);
+                });
+
             const missing = teams.filter(t => !(t in teamColor));
             const fallback = d3.scaleOrdinal(colorPool).domain(missing);
             const allColor = {};
@@ -256,12 +306,8 @@
             }
 
             function render(rows) {
-                const sel = fg.selectAll("path")
-                    .data(rows, d => d.team + "_" + d["season-end-year"]);
-                sel.exit()
-                    .transition().duration(300)
-                    .style("opacity", 0)
-                    .remove();
+                const sel = fg.selectAll("path").data(rows, d => d.team + "_" + d["season-end-year"]);
+                sel.exit().transition().duration(300).style("opacity", 0).remove();
                 sel.enter().append("path")
                     .attr("d", pathFn)
                     .attr("stroke", d => allColor[d.team])
@@ -398,7 +444,7 @@
                                 .style("opacity", 0.6)
                                 .style("stroke-width", 2);
                         })
-                        .on("click", () => {  // also filter on click
+                        .on("click", () => {
                             d3.select("#team-select").property("value", team);
                             filter();
                         });
@@ -413,73 +459,58 @@
                         .style("font-size", "12px");
                 });
 
-            const smallTeams = ["Arsenal", "Chelsea", "Liverpool", "Manchester City"];
-            const smW = 200, smH = 120;
-            const smM = { t: 20, r: 10, b: 30, l: 30 };
+            drawSmallMultiples(defaultSM);
 
-            d3.select("body")
-                .append("div").attr("id", "small-multiples")
-                .style("display", "flex")
-                .style("gap", "20px")
-                .style("margin-top", "30px");
+            function drawSmallMultiples(teamList) {
+                const container = d3.select("#small-multiples");
+                container.selectAll("*").remove();
+                const smW = 180, smH = 100, smM = { t: 10, l: 30, b: 20, r: 10 };
+                teamList.forEach(team => {
+                    const td = data.filter(d => d.team === team)
+                        .sort((a, b) => a["season-end-year"] - b["season-end-year"]);
+                    const sx = d3.scaleLinear()
+                        .domain(d3.extent(td, d => +d["season-end-year"]))
+                        .range([smM.l, smW - smM.r]);
+                    const sy = d3.scaleLinear()
+                        .domain(d3.extent(td, d => d.goals_scored)).nice()
+                        .range([smH - smM.b, smM.t]);
+                    const sgv = container.append("svg")
+                        .attr("width", smW).attr("height", smH);
+                    sgv.append("path")
+                        .datum(td)
+                        .attr("fill", "none")
+                        .attr("stroke", allColor[team])
+                        .attr("stroke-width", 1.5)
+                        .attr("d", d3.line()
+                            .x(d => sx(d["season-end-year"]))
+                            .y(d => sy(d.goals_scored))
+                        );
+                    const n = td.length,
+                        SX = d3.sum(td, d => +d["season-end-year"]),
+                        SY = d3.sum(td, d => d.goals_scored),
+                        SXY = d3.sum(td, d => +d["season-end-year"] * d.goals_scored),
+                        SX2 = d3.sum(td, d => (+d["season-end-year"]) ** 2),
+                        m = (n * SXY - SX * SY) / (n * SX2 - SX * SX),
+                        b = (SY - m * SX) / n,
+                        xEx = d3.extent(td, d => +d["season-end-year"]);
+                    sgv.append("line")
+                        .attr("x1", sx(xEx[0])).attr("y1", sy(m * xEx[0] + b))
+                        .attr("x2", sx(xEx[1])).attr("y2", sy(m * xEx[1] + b))
+                        .attr("stroke", "black").attr("stroke-dasharray", "3,2");
+                    sgv.append("g")
+                        .attr("transform", `translate(0,${smH - smM.b})`)
+                        .call(d3.axisBottom(sx).ticks(4).tickFormat(d3.format("d")).tickSize(2));
+                    sgv.append("g")
+                        .attr("transform", `translate(${smM.l},0)`)
+                        .call(d3.axisLeft(sy).ticks(3).tickSize(2));
+                    sgv.append("text")
+                        .attr("x", smM.l).attr("y", smM.t)
+                        .style("font-size", "12px").style("font-weight", "bold")
+                        .text(team);
+                });
+            }
 
-            smallTeams.forEach(team => {
-                const td = data
-                    .filter(d => d.team === team)
-                    .sort((a, b) => +a["season-end-year"] - +b["season-end-year"]);
-
-                const sx = d3.scaleLinear()
-                    .domain(d3.extent(td, d => +d["season-end-year"]))
-                    .range([smM.l, smW - smM.r]);
-
-                const sy = d3.scaleLinear()
-                    .domain(d3.extent(td, d => d.goals_scored))
-                    .range([smH - smM.b, smM.t]);
-
-                const svgSm = d3.select("#small-multiples")
-                    .append("svg")
-                    .attr("width", smW)
-                    .attr("height", smH);
-
-                svgSm.append("path")
-                    .datum(td)
-                    .attr("fill", "none")
-                    .attr("stroke", allColor[team])
-                    .attr("d", d3.line()
-                        .x(d => sx(+d["season-end-year"]))
-                        .y(d => sy(d.goals_scored)));
-
-                const n = td.length,
-                    sumX = d3.sum(td, d => +d["season-end-year"]),
-                    sumY = d3.sum(td, d => d.goals_scored),
-                    sumXY = d3.sum(td, d => +d["season-end-year"] * d.goals_scored),
-                    sumX2 = d3.sum(td, d => (+d["season-end-year"]) ** 2),
-                    m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX),
-                    b = (sumY - m * sumX) / n,
-                    xExt = d3.extent(td, d => +d["season-end-year"]);
-
-                svgSm.append("line")
-                    .attr("x1", sx(xExt[0])).attr("y1", sy(m * xExt[0] + b))
-                    .attr("x2", sx(xExt[1])).attr("y2", sy(m * xExt[1] + b))
-                    .attr("stroke", "black")
-                    .attr("stroke-dasharray", "3,2");
-
-                svgSm.append("g")
-                    .attr("transform", `translate(0,${smH - smM.b})`)
-                    .call(d3.axisBottom(sx).ticks(4).tickFormat(d3.format("d")).tickSize(3));
-
-                svgSm.append("g")
-                    .attr("transform", `translate(${smM.l},0)`)
-                    .call(d3.axisLeft(sy).ticks(4).tickSize(3));
-
-                svgSm.append("text")
-                    .attr("x", smM.l).attr("y", smM.t - 5)
-                    .text(team)
-                    .style("font-size", "12px")
-                    .style("font-weight", "bold");
-            });
-        })
-            .catch(err => console.error(err));
+        }).catch(err => console.error(err));
     </script>
 </body>
 
